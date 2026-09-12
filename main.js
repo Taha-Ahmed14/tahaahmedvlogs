@@ -240,3 +240,124 @@
     });
   }
 })();
+
+// ============================================================
+// TAHA AI — floating assistant widget
+// ============================================================
+(function () {
+  "use strict";
+
+  var fab = document.getElementById("aiFab");
+  var panel = document.getElementById("aiPanel");
+  var closeBtn = document.getElementById("aiCloseBtn");
+  var body = document.getElementById("aiBody");
+  var form = document.getElementById("aiForm");
+  var input = document.getElementById("aiInput");
+
+  if (!fab || !panel) return;
+
+  var history = []; // {role: 'user'|'assistant', content: string}
+  var MAX_HISTORY = 8;
+
+  function openPanel() {
+    panel.classList.add("open");
+    fab.classList.add("open");
+    setTimeout(function () { input.focus(); }, 200);
+  }
+  function closePanel() {
+    panel.classList.remove("open");
+    fab.classList.remove("open");
+  }
+  fab.addEventListener("click", function () {
+    panel.classList.contains("open") ? closePanel() : openPanel();
+  });
+  if (closeBtn) closeBtn.addEventListener("click", closePanel);
+
+  function scrollToBottom() {
+    body.scrollTop = body.scrollHeight;
+  }
+
+  function addBotMessage(text) {
+    var el = document.createElement("div");
+    el.className = "ai-msg bot";
+    el.innerHTML = text;
+    body.appendChild(el);
+    scrollToBottom();
+  }
+
+  function addUserMessage(text) {
+    var el = document.createElement("div");
+    el.className = "ai-msg user";
+    el.textContent = text;
+    body.appendChild(el);
+    scrollToBottom();
+  }
+
+  function addTyping() {
+    var el = document.createElement("div");
+    el.className = "ai-msg bot typing";
+    el.id = "aiTypingIndicator";
+    el.innerHTML = "<span></span><span></span><span></span>";
+    body.appendChild(el);
+    scrollToBottom();
+    return el;
+  }
+
+  function removeTyping() {
+    var el = document.getElementById("aiTypingIndicator");
+    if (el) el.remove();
+  }
+
+  // quick-action chips that scroll to a section
+  document.querySelectorAll(".ai-chip[data-scroll]").forEach(function (chip) {
+    chip.addEventListener("click", function () {
+      var target = document.querySelector(chip.getAttribute("data-scroll"));
+      if (target) target.scrollIntoView({ behavior: "smooth" });
+      closePanel();
+    });
+  });
+
+  // suggested-question chips that ask the AI directly
+  document.querySelectorAll(".ai-chip.ai-ask").forEach(function (chip) {
+    chip.addEventListener("click", function () {
+      sendMessage(chip.textContent.trim());
+    });
+  });
+
+  async function sendMessage(text) {
+    if (!text) return;
+    addUserMessage(text);
+    history.push({ role: "user", content: text });
+    if (history.length > MAX_HISTORY) history = history.slice(-MAX_HISTORY);
+
+    var typingEl = addTyping();
+
+    try {
+      var res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text, history: history.slice(0, -1) })
+      });
+
+      if (!res.ok) throw new Error("Bad response");
+      var data = await res.json();
+      removeTyping();
+      var reply = (data && data.reply) ? data.reply : "Sorry, I couldn't get a response right now. Try WhatsApp or email instead!";
+      addBotMessage(reply);
+      history.push({ role: "assistant", content: reply });
+    } catch (err) {
+      removeTyping();
+      addBotMessage("Hmm, I'm having trouble connecting right now. You can reach Taha directly on <a href=\"https://wa.me/923336506507\" target=\"_blank\" rel=\"noopener\" style=\"color:#ec4899;\">WhatsApp</a> or <a href=\"mailto:tahastars23@gmail.com\" style=\"color:#ec4899;\">email</a>.");
+    }
+  }
+
+  if (form) {
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var text = input.value.trim();
+      if (!text) return;
+      input.value = "";
+      sendMessage(text);
+    });
+  }
+})();
